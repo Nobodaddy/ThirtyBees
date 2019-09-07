@@ -23,7 +23,7 @@
  *
  * @author    thirty bees <contact@thirtybees.com>
  * @author    PrestaShop SA <contact@prestashop.com>
- * @copyright 2017-2018 thirty bees
+ * @copyright 2017-2019 thirty bees
  * @copyright 2007-2016 PrestaShop SA
  * @license   http://opensource.org/licenses/osl-3.0.php  Open Software License (OSL 3.0)
  *  PrestaShop is an internationally registered trademark & property of PrestaShop SA
@@ -119,7 +119,52 @@ class HTMLTemplateOrderSlipCore extends HTMLTemplateInvoice
         }
 
         $customer = new Customer((int) $this->order->id_customer);
+        $this->order->total_paid_tax_excl = $this->order->total_paid_tax_incl = $this->order->total_products = $this->order->total_products_wt = 0;
+
+        if ($this->order_slip->amount > 0) {
+            foreach ($this->order->products as &$product) {
+                $product['total_price_tax_excl'] = $product['unit_price_tax_excl'] * $product['product_quantity'];
+                $product['total_price_tax_incl'] = $product['unit_price_tax_incl'] * $product['product_quantity'];
+
+                if ($this->order_slip->partial == 1) {
+                    $orderSlipDetail = Db::getInstance(_PS_USE_SQL_SLAVE_)->getRow(
+                        (new DbQuery())
+                            ->select('*')
+                            ->from('order_slip_detail')
+                            ->where('`id_order_slip` = '.(int) $this->order_slip->id)
+                            ->where('`id_order_detail` = '.(int) $product['id_order_detail'])
+                    );
+
+                    $product['total_price_tax_excl'] = $orderSlipDetail['amount_tax_excl'];
+                    $product['total_price_tax_incl'] = $orderSlipDetail['amount_tax_incl'];
+                }
+
+                $this->order->total_products += $product['total_price_tax_excl'];
+                $this->order->total_products_wt += $product['total_price_tax_incl'];
+                $this->order->total_paid_tax_excl = $this->order->total_products;
+                $this->order->total_paid_tax_incl = $this->order->total_products_wt;
+            }
+        } else {
+            $this->order->products = null;
+        }
+
+        unset($product); // remove reference
+
+        if ($this->order_slip->shipping_cost == 0) {
+            $this->order->total_shipping_tax_incl = $this->order->total_shipping_tax_excl = 0;
+        }
+
+        $tax = new Tax();
+        $tax->rate = $this->order->carrier_tax_rate;
+
         $taxExcludedDisplay = Group::getPriceDisplayMethod((int) $customer->id_default_group);
+
+        $this->order->total_shipping_tax_incl = $this->order_slip->total_shipping_tax_incl;
+        $this->order->total_shipping_tax_excl = $this->order_slip->total_shipping_tax_excl;
+        $this->order_slip->shipping_cost_amount = $taxExcludedDisplay ? $this->order_slip->total_shipping_tax_excl : $this->order_slip->total_shipping_tax_incl;
+
+        $this->order->total_paid_tax_incl += $this->order->total_shipping_tax_incl;
+        $this->order->total_paid_tax_excl += $this->order->total_shipping_tax_excl;
 
         $totalCartRule = 0;
         if ($this->order_slip->order_slip_type == 1 && is_array($cartRules = $this->order->getCartRules())) {
@@ -260,21 +305,9 @@ class HTMLTemplateOrderSlipCore extends HTMLTemplateInvoice
             $breakdown[$rate]['total_amount'] += $row['total_amount'];
         }
 
-        $decimals = 0;
-        if ((new Currency($this->order->id_currency))->decimals) {
-            $decimals = Configuration::get('PS_PRICE_DISPLAY_PRECISION');
-        }
         foreach ($breakdown as $rate => $data) {
-            $breakdown[$rate]['total_price_tax_excl'] = Tools::ps_round(
-                $data['total_price_tax_excl'],
-                $decimals,
-                $this->order->round_mode
-            );
-            $breakdown[$rate]['total_amount'] = Tools::ps_round(
-                $data['total_amount'],
-                $decimals,
-                $this->order->round_mode
-            );
+            $breakdown[$rate]['total_price_tax_excl'] = Tools::ps_round($data['total_price_tax_excl'], _TB_PRICE_DATABASE_PRECISION_, $this->order->round_mode);
+            $breakdown[$rate]['total_amount'] = Tools::ps_round($data['total_amount'], _TB_PRICE_DATABASE_PRECISION_, $this->order->round_mode);
         }
 
         ksort($breakdown);
@@ -291,33 +324,27 @@ class HTMLTemplateOrderSlipCore extends HTMLTemplateInvoice
      * @version 1.0.0 Initial version
      * @throws PrestaShopException
      */
-    public function getShippingTaxesBreakdown()
-    {
-        $taxesBreakdown = [];
-        $tax = new Tax();
-        $tax->rate = $this->order->carrier_tax_rate;
-        $taxCalculator = new TaxCalculator([$tax]);
-        $customer = new Customer((int) $this->order->id_customer);
-        $taxExcludedDisplay = Group::getPriceDisplayMethod((int) $customer->id_default_group);
 
-        if ($taxExcludedDisplay) {
-            $totalTaxExcl = $this->order_slip->shipping_cost_amount;
-            $shippingTaxAmount = $taxCalculator->addTaxes($this->order_slip->shipping_cost_amount) - $totalTaxExcl;
-        } else {
-            $totalTaxExcl = $taxCalculator->removeTaxes($this->order_slip->shipping_cost_amount);
-            $shippingTaxAmount = $this->order_slip->shipping_cost_amount - $totalTaxExcl;
-        }
+		public function getShippingTaxesBreakdown()
+	{
+		$taxes_breakdown = array();
+		$tax = new Tax();
+		$tax->rate = $this->order->carrier_tax_rate;
 
-        if ($shippingTaxAmount > 0) {
-            $taxesBreakdown[] = [
-                'rate'           => $this->order->carrier_tax_rate,
-                'total_amount'   => $shippingTaxAmount,
-                'total_tax_excl' => $totalTaxExcl,
-            ];
-        }
+		$tax_calculator = new TaxCalculator(array($tax));
 
-        return $taxesBreakdown;
-    }
+		$totalTaxExcl = $tax_calculator->removeTaxes($this->order_slip->shipping_cost_amount);
+		$shippingTaxAmount = $this->order_slip->shipping_cost_amount - $totalTaxExcl;
+
+		if ($shippingTaxAmount > 0)
+			$taxes_breakdown[] = array(
+				'rate' =>  $this->order->carrier_tax_rate,
+				'total_amount' => $shippingTaxAmount,
+				'total_tax_excl' => $totalTaxExcl,
+			);
+
+		return $taxesBreakdown;
+	}
 
     /**
      * Returns different tax breakdown elements
