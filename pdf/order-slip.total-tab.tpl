@@ -32,7 +32,7 @@
 				<td class="grey" width="70%">{l s='Shipping (Tax Incl.)' pdf='true'}</td>
 			{/if}
 			<td class="white" width="30%">
-				- {displayPrice currency=$order->id_currency price=$order_slip->shipping_cost_amount}
+				 {displayPrice currency=$order->id_currency price=$order_slip->shipping_cost_amount}
 			</td>
 		</tr>
 	{/if}
@@ -45,7 +45,7 @@
 						{l s='Product Total (Tax Excl.)' pdf='true'}
 					</td>
 					<td class="white" width="30%">
-						- {displayPrice currency=$order->id_currency price=$order->total_products}
+						 {displayPrice currency=$order->id_currency price=$order->total_products}
 					</td>
 				</tr>
 			{else}
@@ -54,7 +54,7 @@
 						{l s='Product Total (Tax Incl.)' pdf='true'}
 					</td>
 					<td class="white" width="30%">
-						- {displayPrice currency=$order->id_currency price=$order->total_products_wt}
+						 {displayPrice currency=$order->id_currency price=$order->total_products_wt}
 					</td>
 				</tr>
 			{/if}
@@ -64,7 +64,7 @@
 					{l s='Product Total' pdf='true'}
 				</td>
 				<td class="white" width="30%">
-					- {displayPrice currency=$order->id_currency price=$order->total_products}
+					 {displayPrice currency=$order->id_currency price=$order->total_products}
 				</td>
 			</tr>
 		{/if}
@@ -76,7 +76,7 @@
 				{l s='Total Tax' pdf='true'}
 			</td>
 			<td class="white" width="30%">
-				- {displayPrice currency=$order->id_currency price=($order->total_paid_tax_incl - $order->total_paid_tax_excl)}
+				 {displayPrice currency=$order->id_currency price=($order->total_paid_tax_incl - $order->total_paid_tax_excl)}
 			</td>
 		</tr>
 	{/if}
@@ -93,12 +93,12 @@
 				{else}
 					{$total_paid = $order->total_paid_tax_incl - $total_cart_rule}
 				{/if}
-				- {displayPrice currency=$order->id_currency price=$total_paid}
+				 {displayPrice currency=$order->id_currency price=$total_paid}
 			{else}
 				{if $tax_excluded_display}
-					- {displayPrice currency=$order->id_currency price=$order->total_paid_tax_excl}
+					 {displayPrice currency=$order->id_currency price=$order->total_paid_tax_excl}
 				{else}
-					- {displayPrice currency=$order->id_currency price=$order->total_paid_tax_incl}
+					 {displayPrice currency=$order->id_currency price=$order->total_paid_tax_incl}
 				{/if}
 			{/if}
 		</td>
